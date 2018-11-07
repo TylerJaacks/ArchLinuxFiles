@@ -1,5 +1,21 @@
 #!/bin/bash
-# Based on the this Shell Script: https://github.com/helmuthdu/aui/blob/master/fifo 
+#-------------------------------------------------------------------------------
+#Created by helmuthdu mailto: helmuthdu[at]gmail[dot]com
+#-------------------------------------------------------------------------------
+#This program is free software: you can redistribute it and/or modify
+#it under the terms of the GNU General Public License as published by
+#the Free Software Foundation, either version 3 of the License, or
+#(at your option) any later version.
+#
+#This program is distributed in the hope that it will be useful,
+#but WITHOUT ANY WARRANTY; without even the implied warranty of
+#MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#GNU General Public License for more details.
+#
+#You should have received a copy of the GNU General Public License
+#along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#-------------------------------------------------------------------------------
+# Run this script after your first boot with archlinux (as root)
 
 if [[ -f `pwd`/sharedfuncs ]]; then
   source sharedfuncs
@@ -25,7 +41,6 @@ select_keymap(){
     fi
     done
 }
-
 #}}}
 #DEFAULT EDITOR {{{
 select_editor(){
@@ -42,7 +57,59 @@ select_editor(){
     fi
   done
 }
+#}}}
+#MIRRORLIST {{{
+configure_mirrorlist(){
+  local countries_code=("AU" "AT" "BY" "BE" "BR" "BG" "CA" "CL" "CN" "CO" "CZ" "DK" "EE" "FI" "FR" "DE" "GR" "HK" "HU" "ID" "IN" "IR" "IE" "IL" "IT" "JP" "KZ" "KR" "LV" "LU" "MK" "NL" "NC" "NZ" "NO" "PL" "PT" "RO" "RU" "RS" "SG" "SK" "ZA" "ES" "LK" "SE" "CH" "TW" "TR" "UA" "GB" "US" "UZ" "VN")
+  local countries_name=("Australia" "Austria" "Belarus" "Belgium" "Brazil" "Bulgaria" "Canada" "Chile" "China" "Colombia" "Czech Republic" "Denmark" "Estonia" "Finland" "France" "Germany" "Greece" "Hong Kong" "Hungary" "Indonesia" "India" "Iran" "Ireland" "Israel" "Italy" "Japan" "Kazakhstan" "Korea" "Latvia" "Luxembourg" "Macedonia" "Netherlands" "New Caledonia" "New Zealand" "Norway" "Poland" "Portugal" "Romania" "Russia" "Serbia" "Singapore" "Slovakia" "South Africa" "Spain" "Sri Lanka" "Sweden" "Switzerland" "Taiwan" "Turkey" "Ukraine" "United Kingdom" "United States" "Uzbekistan" "Viet Nam")
+  country_list(){
+    #`reflector --list-countries | sed 's/[0-9]//g' | sed 's/^/"/g' | sed 's/,.*//g' | sed 's/ *$//g'  | sed 's/$/"/g' | sed -e :a -e '$!N; s/\n/ /; ta'`
+    PS3="$prompt1"
+    echo "Select your country:"
+    select country_name in "${countries_name[@]}"; do
+      if contains_element "$country_name" "${countries_name[@]}"; then
+        country_code=${countries_code[$(( $REPLY - 1 ))]}
+        break
+      else
+        invalid_option
+      fi
+    done
+  }
+  print_title "MIRRORLIST - https://wiki.archlinux.org/index.php/Mirrors"
+  print_info "This option is a guide to selecting and configuring your mirrors, and a listing of current available mirrors."
+  OPTION=n
+  while [[ $OPTION != y ]]; do
+    country_list
+    read_input_text "Confirm country: $country_name"
+  done
 
+  url="https://www.archlinux.org/mirrorlist/?country=${country_code}&use_mirror_status=on"
+
+  tmpfile=$(mktemp --suffix=-mirrorlist)
+
+  # Get latest mirror list and save to tmpfile
+  curl -so ${tmpfile} ${url}
+  sed -i 's/^#Server/Server/g' ${tmpfile}
+
+  # Backup and replace current mirrorlist file (if new file is non-zero)
+  if [[ -s ${tmpfile} ]]; then
+   { echo " Backing up the original mirrorlist..."
+     mv -i /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.orig; } &&
+   { echo " Rotating the new list into place..."
+     mv -i ${tmpfile} /etc/pacman.d/mirrorlist; }
+  else
+    echo " Unable to update, could not download list."
+  fi
+  # better repo should go first
+  pacman -Sy pacman-contrib
+  cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.tmp
+  rankmirrors /etc/pacman.d/mirrorlist.tmp > /etc/pacman.d/mirrorlist
+  rm /etc/pacman.d/mirrorlist.tmp
+  # allow global read access (required for non-root yaourt execution)
+  chmod +r /etc/pacman.d/mirrorlist
+  $EDITOR /etc/pacman.d/mirrorlist
+}
+#}}}
 #UMOUNT PARTITIONS {{{
 umount_partitions(){
   mounted_partitions=(`lsblk | grep ${MOUNTPOINT} | awk '{print $7}' | sort -r`)
@@ -438,14 +505,12 @@ install_base_system(){
     arch_chroot "systemctl enable espeakup.service"
   fi
 }
-
 #}}}
 #CONFIGURE KEYMAP {{{
 configure_keymap(){
   #ADD KEYMAP TO THE NEW SETUP
   echo "KEYMAP=$KEYMAP" > ${MOUNTPOINT}/etc/vconsole.conf
 }
-
 #}}}
 #CONFIGURE FSTAB {{{
 configure_fstab(){
@@ -484,7 +549,6 @@ configure_fstab(){
   pause_function
   $EDITOR ${MOUNTPOINT}/etc/fstab
 }
-
 #}}}
 #CONFIGURE HOSTNAME {{{
 configure_hostname(){
@@ -500,7 +564,6 @@ configure_hostname(){
   arch_chroot "sed -i '/127.0.0.1/s/$/ '${host_name}'/' /etc/hosts"
   arch_chroot "sed -i '/::1/s/$/ '${host_name}'/' /etc/hosts"
 }
-
 #}}}
 #CONFIGURE TIMEZONE {{{
 configure_timezone(){
@@ -517,7 +580,6 @@ configure_timezone(){
   arch_chroot "echo \"FallbackNTP=0.pool.ntp.org 1.pool.ntp.org 0.fr.pool.ntp.org\" >> /etc/systemd/timesyncd.conf"
   arch_chroot "systemctl enable systemd-timesyncd.service"
 }
-
 #}}}
 #CONFIGURE HARDWARECLOCK {{{
 configure_hardwareclock(){
@@ -537,7 +599,6 @@ configure_hardwareclock(){
   done
   hwclock=$OPT
 }
-
 #}}}
 #CONFIGURE LOCALE {{{
 configure_locale(){
@@ -552,7 +613,6 @@ configure_locale(){
   arch_chroot "sed -i 's/#\('${LOCALE_UTF8}'\)/\1/' /etc/locale.gen"
   arch_chroot "locale-gen"
 }
-
 #}}}
 #CONFIGURE MKINITCPIO {{{
 configure_mkinitcpio(){
@@ -568,7 +628,6 @@ configure_mkinitcpio(){
     arch_chroot "mkinitcpio -p linux"
   fi
 }
-
 #}}}
 #INSTALL BOOTLOADER {{{
 install_bootloader(){
@@ -616,7 +675,6 @@ install_bootloader(){
   done
   [[ $UEFI -eq 1 ]] && pacstrap ${MOUNTPOINT} efibootmgr dosfstools
 }
-
 #}}}
 #CONFIGURE BOOTLOADER {{{
 configure_bootloader(){
@@ -763,7 +821,6 @@ configure_bootloader(){
   esac
   pause_function
 }
-
 #}}}
 #ROOT PASSWORD {{{
 root_password(){
@@ -772,7 +829,6 @@ root_password(){
   arch_chroot "passwd"
   pause_function
 }
-
 #}}}
 #FINISH {{{
 finish(){
@@ -790,7 +846,7 @@ finish(){
 #}}}
 
 print_title "https://wiki.archlinux.org/index.php/Arch_Install_Scripts"
-print_info "Tyler's Modified Arch Install Script."
+print_info "The Arch Install Scripts are a set of Bash scripts that simplify Arch installation."
 pause_function
 check_boot_system
 check_connection
@@ -801,16 +857,17 @@ do
   print_title "ARCHLINUX ULTIMATE INSTALL - https://github.com/helmuthdu/aui"
   echo " 1) $(mainmenu_item "${checklist[1]}"  "Select Keymap"            "${KEYMAP}" )"
   echo " 2) $(mainmenu_item "${checklist[2]}"  "Select Editor"            "${EDITOR}" )"
-  echo " 3) $(mainmenu_item "${checklist[4]}"  "Partition Scheme"         "${partition_layout}: ${partition}(${filesystem}) swap(${swap_type})" )"
-  echo " 4) $(mainmenu_item "${checklist[5]}"  "Install Base System")"
-  echo " 5) $(mainmenu_item "${checklist[6]}"  "Configure Fstab"          "${fstab}" )"
-  echo " 6) $(mainmenu_item "${checklist[7]}"  "Configure Hostname"       "${host_name}" )"
-  echo " 7) $(mainmenu_item "${checklist[8]}"  "Configure Timezone"       "${ZONE}/${SUBZONE}" )"
-  echo " 8) $(mainmenu_item "${checklist[9]}"  "Configure Hardware Clock" "${hwclock}" )"
-  echo " 9) $(mainmenu_item "${checklist[10]}" "Configure Locale"         "${LOCALE}" )"
-  echo "10) $(mainmenu_item "${checklist[11]}" "Configure Mkinitcpio")"
-  echo "11) $(mainmenu_item "${checklist[12]}" "Install Bootloader"       "${bootloader}" )"
-  echo "12) $(mainmenu_item "${checklist[13]}" "Root Password")"
+  echo " 3) $(mainmenu_item "${checklist[3]}"  "Configure Mirrorlist"     "${country_name} (${country_code})" )"
+  echo " 4) $(mainmenu_item "${checklist[4]}"  "Partition Scheme"         "${partition_layout}: ${partition}(${filesystem}) swap(${swap_type})" )"
+  echo " 5) $(mainmenu_item "${checklist[5]}"  "Install Base System")"
+  echo " 6) $(mainmenu_item "${checklist[6]}"  "Configure Fstab"          "${fstab}" )"
+  echo " 7) $(mainmenu_item "${checklist[7]}"  "Configure Hostname"       "${host_name}" )"
+  echo " 8) $(mainmenu_item "${checklist[8]}"  "Configure Timezone"       "${ZONE}/${SUBZONE}" )"
+  echo " 9) $(mainmenu_item "${checklist[9]}"  "Configure Hardware Clock" "${hwclock}" )"
+  echo "10) $(mainmenu_item "${checklist[10]}" "Configure Locale"         "${LOCALE}" )"
+  echo "11) $(mainmenu_item "${checklist[11]}" "Configure Mkinitcpio")"
+  echo "12) $(mainmenu_item "${checklist[12]}" "Install Bootloader"       "${bootloader}" )"
+  echo "13) $(mainmenu_item "${checklist[13]}" "Root Password")"
   echo ""
   echo " d) Done"
   echo ""
@@ -826,46 +883,50 @@ do
         checklist[2]=1
         ;;
       3)
+        configure_mirrorlist
+        checklist[3]=1
+        ;;
+      4)
         umount_partitions
         create_partition_scheme
         format_partitions
         checklist[4]=1
         ;;
-      4)
+      5)
         install_base_system
         configure_keymap
         checklist[5]=1
         ;;
-      5)
+      6)
         configure_fstab
         checklist[6]=1
         ;;
-      6)
+      7)
         configure_hostname
         checklist[7]=1
         ;;
-      7)
+      8)
         configure_timezone
         checklist[8]=1
         ;;
-      8)
+      9)
         configure_hardwareclock
         checklist[9]=1
         ;;
-      9)
+      10)
         configure_locale
         checklist[10]=1
         ;;
-      10)
+      11)
         configure_mkinitcpio
         checklist[11]=1
         ;;
-      11)
+      12)
         install_bootloader
         configure_bootloader
         checklist[12]=1
         ;;
-      12)
+      13)
         root_password
         checklist[13]=1
         ;;
